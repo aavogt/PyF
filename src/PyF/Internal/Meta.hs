@@ -9,7 +9,7 @@ module PyF.Internal.Meta (toExp, baseDynFlags, toName) where
 import qualified Data.List.NonEmpty as NE
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Hs.Type (HsWildCardBndrs (..), HsType (..), HsSigType(HsSig), sig_body)
+import GHC.Hs.Type (HsWildCardBndrs (..), HsType (..), HsIPName(HsIPName), HsSigType(HsSig), sig_body)
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Hs.Type (HsWildCardBndrs (..), HsType (..), HsImplicitBndrs(HsIB), hsib_body)
 #elif MIN_VERSION_ghc(8,10,0)
@@ -167,7 +167,11 @@ toExp _ (Expr.HsUnboundVar _ n)              = TH.UnboundVarE (TH.mkName . occNa
 toExp _ (Expr.HsUnboundVar _ n)              = TH.UnboundVarE (TH.mkName . occNameString . Expr.unboundVarOcc $ n)
 #endif
 
-toExp _ Expr.HsIPVar {} = noTH "toExp" "HsIPVar"
+#if MIN_VERSION_ghc(8,8,0)
+toExp _ (Expr.HsIPVar _ (HsIPName x)) = TH.ImplicitParamVarE (unpackFS x)
+#else
+toExp _ Expr.HsIPVar {} = noTH "toExp" "upgrade to ghc>=8.8 for ImplicitParamsVarE"
+#endif
 toExp _ (Expr.HsLit _ l) = TH.LitE (toLit l)
 toExp _ (Expr.HsOverLit _ OverLit {ol_val}) = TH.LitE (toLit' ol_val)
 toExp d (Expr.HsApp _ e1 e2) = TH.AppE (toExp d . unLoc $ e1) (toExp d . unLoc $ e2)
@@ -299,8 +303,10 @@ toExp dynFlags e = todo "toExp" (showSDoc dynFlags . ppr $ e)
 todo :: (HasCallStack, Show e) => String -> e -> a
 todo fun thing = error . concat $ [moduleName, ".", fun, ": not implemented: ", show thing, "Please open an issue at https://github.com/guibou/PyF/issues"]
 
+#if !MIN_VERSION_ghc(8,8,0)
 noTH :: (HasCallStack, Show e) => String -> e -> a
 noTH fun thing = error . concat $ [moduleName, ".", fun, ": no TemplateHaskell for: ", show thing, "Please open an issue at https://github.com/guibou/PyF/issues"]
+#endif
 
 moduleName :: String
 moduleName = "PyF.Internal.Meta"
